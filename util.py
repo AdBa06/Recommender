@@ -93,8 +93,6 @@ def find_similar_users(user_query, user_info_list, user_embeddings, model):
 
 
 
-
-
 if __name__ == "__main__":
     df = read_csv_file('to_llm.csv')
     if df is not None:
