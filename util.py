@@ -5,6 +5,10 @@ from dotenv import dotenv_values
 from langchain_openai import AzureChatOpenAI
 from sentence_transformers import SentenceTransformer, util
 import torch
+import openai
+from openai import OpenAI
+from openai import AzureOpenAI
+
 
 #__________________________________________Access OpenAI API________________________________________________
 # Function to retrieve Azure API configuration from environment
@@ -58,7 +62,7 @@ def read_csv_file(file_path='to_llm.csv'):
     try:
         df = pd.read_csv(file_path)
         print("CSV file read successfully!")
-        return df
+        return df.head(10)  # Limit to first 10 rows
     except Exception as e:
         print(f"An error occurred: {e}")
         return None
@@ -68,51 +72,126 @@ def combine_columns_to_prompt(df, activity_columns, facility_columns):
     df['combined_facilities'] = df[facility_columns].apply(lambda row: ' '.join(row.values.astype(str)), axis=1)
     return df
 
-# New function to embed user information
-def embed_user_info(df, model):
-    user_info_list = []
-    for index, row in df.iterrows():
-        user_info = f"MDAS ID: {row['MDAS ID']}, Age: {row['Age']}, Race: {row['Race']}, Activities: {row['combined_activities']}, Facilities: {row['combined_facilities']}"
-        user_info_list.append(user_info)
+def get_openai_client():
+    config = get_llm_api_config_details()
+    client = AzureOpenAI(
+        api_key=config['AZURE_API_KEY'],
+        api_version=config['AZURE_API_VERSION'],
+        azure_endpoint=config['AZURE_API_BASE']
+    )
+    return client
+# Function to embed user information
+def embed_text(text, model_name='text-embedding-3-small'):
+    client = get_openai_client()
+    response = client.embeddings.create(input=[text], model=model_name)
+    embedding = response.data[0].embedding
+    return embedding
+
+
+# Function to embed dataframe rows
+def embed_dataframe(df, model_name='text-embedding-3-small'):
+    df['combined_info'] = df.apply(lambda row: f"MDAS ID: {row['MDAS ID']}, Age: {row['Age']}, Race: {row['Race']}, Activities: {row['combined_activities']}, Facilities: {row['combined_facilities']}", axis=1)
+    embeddings = df['combined_info'].apply(lambda x: embed_text(x, model_name=model_name)).tolist()
+    return embeddings
+
+# Function to perform similarity search
+def perform_similarity_search(user_embedding, embedded_data, top_n=5):
+    # Compute cosine similarities
+    similarities = util.pytorch_cos_sim(user_embedding, torch.tensor(embedded_data)).numpy()[0]
+
+    # Get indices of top similar users
+    top_indices = (-similarities).argsort()[:top_n]
+
+    return top_indices, similarities[top_indices]
+
+
+def parse_user_query(query):
+    # Define some simple rules to extract information
+    query_dict = {
+        'MDAS ID': '',
+        'Age': '',
+        'Race': '',
+        'Activity 1': '',
+        'Activity 2': '',
+        'Activity 3': '',
+        'Facility 1': '',
+        'Facility 2': '',
+        'Facility 3': ''
+    }
     
-    embeddings = model.encode(user_info_list, convert_to_tensor=True)
-    return user_info_list, embeddings
-
-
-
-# Function to embed user query and perform similarity search
-def find_similar_users(user_query, user_info_list, user_embeddings, model):
-    query_embedding = model.encode(user_query, convert_to_tensor=True)
-    cosine_scores = util.pytorch_cos_sim(query_embedding, user_embeddings)[0]
-    top_results = torch.topk(cosine_scores, k=5)
+    # Rule-based extraction
+    query_lower = query.lower()
+    if 'malay' in query_lower:
+        query_dict['Race'] = 'Malay'
+    if 'chinese' in query_lower:
+        query_dict['Race'] = 'Chinese'
+    if 'indian' in query_lower:
+        query_dict['Race'] = 'Indian'
     
-    similar_users = []
-    for score, idx in zip(top_results[0], top_results[1]):
-        similar_users.append((user_info_list[idx], score.item()))
-    return similar_users
+    activities = ['badminton', 'swimming', 'running', 'yoga']
+    for activity in activities:
+        if activity in query_lower:
+            if query_dict['Activity 1'] == '':
+                query_dict['Activity 1'] = activity.capitalize()
+            elif query_dict['Activity 2'] == '':
+                query_dict['Activity 2'] = activity.capitalize()
+            else:
+                query_dict['Activity 3'] = activity.capitalize()
 
+    # You can add more rules to parse other fields if necessary
+    return query_dict
 
+# Main function to read CSV, embed information, and perform similarity search
+def find_top_matching_users(user_query, csv_file='to_llm.csv', model_name='text-embedding-3-small', top_n=5):
+    try:
+        # Parse user query
+        user_input = parse_user_query(user_query)
+        
+        # Read CSV file
+        df = read_csv_file(csv_file)
 
-if __name__ == "__main__":
-    df = read_csv_file('to_llm.csv')
-    if df is not None:
-        # Combine activities and facilities into separate prompts
+        # Combine columns to create prompts
         df = combine_columns_to_prompt(df, ['Activity 1', 'Activity 2', 'Activity 3'], ['Facility 1', 'Facility 2', 'Facility 3'])
-        
-        model = SentenceTransformer('all-MiniLM-L6-v2')  # Choose a suitable embedding model
-        user_info_list, user_embeddings = embed_user_info(df, model)
-        
-        # Example user query
-        user_query = "Looking for a person who likes badminton and is in their 30s."
-        
-        similar_users = find_similar_users(user_query, user_info_list, user_embeddings, model)
-        print("Top 5 similar users based on the query:")
-        for user_info, score in similar_users:
-            print(f"User Info: {user_info}, Similarity Score: {score}")
 
-        # Example completion request
-        completion = get_completion(user_query)
-        if completion:
-            print(completion)
-        else:
-            print("Failed to get completion response.")
+        # Embed CSV data
+        embedded_data = embed_dataframe(df, model_name=model_name)
+
+        # Create user input text
+        user_info = f"MDAS ID: {user_input['MDAS ID']}, Age: {user_input['Age']}, Race: {user_input['Race']}, Activities: {user_input['Activity 1']}, {user_input['Activity 2']}, {user_input['Activity 3']}, Facilities: {user_input['Facility 1']}, {user_input['Facility 2']}, {user_input['Facility 3']}"
+
+        # Embed user input
+        user_embedding = embed_text(user_info, model_name=model_name)
+
+        # Perform similarity search
+        top_indices, top_scores = perform_similarity_search(user_embedding, embedded_data, top_n=top_n)
+
+        # Get top matching users from dataframe
+        top_users = df.iloc[top_indices]
+
+        return top_users, top_scores
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None, None
+
+
+def export_to_csv(top_users, top_scores, output_file='top_matching_users.csv'):
+    try:
+        top_users['Similarity Score'] = top_scores
+        top_users.to_csv('output.csv', index=False)
+        print(f"Top matching users and their scores have been exported to {output_file}")
+    except Exception as e:
+        print(f"An error occurred while exporting to CSV: {e}")
+
+# Example usage:
+if __name__ == "__main__":
+    user_query = "I want a Malay who does volunteerism"
+
+    top_users, top_scores = find_top_matching_users(user_query)
+
+    if top_users is not None:
+        print("Top Matching Users:")
+        print(top_users)
+        print("Corresponding Similarity Scores:")
+        print(top_scores)
+        export_to_csv(top_users, top_scores)
