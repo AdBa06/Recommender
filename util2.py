@@ -17,7 +17,7 @@ def read_csv_file(file_path='to_llm.csv'):
     try:
         df = pd.read_csv(file_path)
         print("CSV file read successfully!")
-        return df
+        return df.head(50)
     except Exception as e:
         print(f"An error occurred: {e}")
         return None
@@ -83,15 +83,13 @@ def embed_dataframe(df, model_name='text-embedding-3-small'):
         f"MDAS ID: {row['MDAS ID']}",
         f"Age: {row['Age']}" if row['Age'] != 'Unknown' else '',
         f"Race: {row['Race']}" if row['Race'] != 'Unknown' else '',
-        f"Activity; {row['Activity 1']}" if row['Activity 1'] != 'Unknown' else '',
-        # f"Activities: {row['combined_activities']}" if row['combined_activities'] != 'Unknown' else '',
-        # f"Facilities: {row['combined_facilities']}" if row['combined_facilities'] != 'Unknown' else ''
+        f"Activity: {row['Activity 1']}" if row['Activity 1'] != 'Unknown' else '',
     ]), axis=1)
     embeddings = df['combined_info'].apply(lambda x: embed_text(x, model_name=model_name)).tolist()
     return embeddings
 
 # Perform similarity search
-def perform_similarity_search(user_embedding, embedded_data, top_n=5):
+def perform_similarity_search(user_embedding, embedded_data, top_n=30):
     similarities = util.pytorch_cos_sim(user_embedding, torch.tensor(embedded_data)).numpy()[0]
     top_indices = (-similarities).argsort()[:top_n]
     return top_indices, similarities[top_indices]
@@ -124,7 +122,7 @@ def extract_info_from_query(query, model_name='gpt-35-turbo'):
     Extract the race, age (if mentioned), and activities in the following format:
     {parser.get_format_instructions()}
     
-    Examples of activities include but are not limited to: badminton, swimming, running, yoga, hiking, cycling, basketball, tennis,  etc.
+    Examples of activities include but are not limited to: badminton, swimming, running, yoga, hiking, cycling, basketball, tennis, etc.
     Examples of races include: Malay, Chinese, Indian, European, Eurasian"""
     llm = get_llm_instance(model=model_name)
     try:
@@ -133,7 +131,6 @@ def extract_info_from_query(query, model_name='gpt-35-turbo'):
     except Exception as e:
         print(f"An error occurred during information extraction: {e}")
         return None
-    
 
 def get_related_keywords(activity, model_name='gpt-35-turbo'):
     prompt = f"Generate a list of related activities for the given activity: {activity}"
@@ -196,7 +193,7 @@ def filter_dataframe(df, query_dict, race_dict, activity_dict):
     return filtered_df
 
 # Main function to read CSV, embed information, and perform similarity search
-def find_top_matching_users(user_query, csv_file='to_llm.csv', model_name='text-embedding-ada-002', top_n=5, keyword_weight=0.7, cosine_weight=0.3):
+def find_top_matching_users(user_query, csv_file='to_llm.csv', model_name='text-embedding-ada-002', top_n=30):
     try:
         user_input = parse_user_query_with_llm(user_query)
         print(user_input)
@@ -215,7 +212,7 @@ def find_top_matching_users(user_query, csv_file='to_llm.csv', model_name='text-
             return None, None
 
         # Combine columns to create prompts
-       # filtered_df = combine_columns_to_prompt(filtered_df, ['Activity 1', 'Activity 2', 'Activity 3'], ['Facility 1', 'Facility 2', 'Facility 3'])
+        # filtered_df = combine_columns_to_prompt(filtered_df, ['Activity 1', 'Activity 2', 'Activity 3'], ['Facility 1', 'Facility 2', 'Facility 3'])
 
         # Embed filtered CSV data
         embedded_data = embed_dataframe(filtered_df, model_name=model_name)
@@ -232,17 +229,10 @@ def find_top_matching_users(user_query, csv_file='to_llm.csv', model_name='text-
 
         top_indices, cosine_similarities = perform_similarity_search(user_embedding, embedded_data, top_n=top_n)
 
-        keywords = set(user_info.split())
-        keyword_scores = [calculate_keyword_score(user_info, filtered_df.iloc[i]['combined_info'], keywords) for i in top_indices]
+        top_users = filtered_df.iloc[top_indices]
+        top_users['Similarity Score'] = cosine_similarities
 
-        combined_scores = [combine_scores(kw_score, cos_sim, keyword_weight, cosine_weight) for kw_score, cos_sim in zip(keyword_scores, cosine_similarities)]
-
-        sorted_indices = [x for _, x in sorted(zip(combined_scores, top_indices), reverse=True)]
-        top_scores = sorted(combined_scores, reverse=True)
-
-        top_users = filtered_df.iloc[sorted_indices]
-
-        return top_users, top_scores
+        return top_users, cosine_similarities
 
     except Exception as e:
         print(f"An error occurred: {e}")
@@ -258,7 +248,7 @@ def export_to_csv(top_users, top_scores, output_file='top_matching_users.csv'):
 
 # Example usage:
 if __name__ == "__main__":
-    user_query = "I want to have a focus group discussion about badminton, but do not include malay people"
+    user_query = "I want to have a discussion with Malays about Volunteerism"
     top_users, top_scores = find_top_matching_users(user_query)
     if top_users is not None and top_scores is not None:
         export_to_csv(top_users, top_scores)
