@@ -55,12 +55,6 @@ def get_completion(string_prompt_value):
         print(f"An error occurred during completion request: {e}")
         return None
 
-# Combine columns to create prompts
-def combine_columns_to_prompt(df, activity_columns, facility_columns):
-    df['combined_activities'] = df[activity_columns].apply(lambda row: ' '.join(row.values.astype(str)), axis=1)
-    df['combined_facilities'] = df[facility_columns].apply(lambda row: ' '.join(row.values.astype(str)), axis=1)
-    return df
-
 def get_openai_client():
     config = get_llm_api_config_details()
     client = AzureOpenAI(
@@ -210,9 +204,6 @@ def find_top_matching_users(user_query, csv_file='to_llm.csv', model_name='text-
         if filtered_df.empty:
             print("No matching users found after filtering.")
             return None, None
-
-        # Combine columns to create prompts
-        # filtered_df = combine_columns_to_prompt(filtered_df, ['Activity 1', 'Activity 2', 'Activity 3'], ['Facility 1', 'Facility 2', 'Facility 3'])
 
         # Embed filtered CSV data
         embedded_data = embed_dataframe(filtered_df, model_name=model_name)
