@@ -49,6 +49,8 @@ I need a list of 10 IDs based on the prompt. For this, I want you to decide who 
 For example, if I ask to talk to people interested in swimming, you might choose to give me the most active swimmers, such as those who have it as acitivity 1. 
 And then, you can also give me IDs of swimmers across different ethnicities for diversity perspective. Present me 2-3 of such cases with the corresponding 10 MDAS IDs for every prompt.
 
+
+
 You can come up with any arbitrary reasoning to find these 10IDs, they do not have to be based on my examples above.
 """
 
@@ -72,6 +74,9 @@ to the final answer.
 Also, why did you specifically choose those 10 IDs, despite many columns having 'Swim' in them?
 """
 
+CSV_PROMPT_OUT = """
+Export the 10 rows corresponding to these MDAS IDs to a csv sheet called 'result.csv'"""
+
 # Main function to read CSV, invoke LLM, and display response
 def main():
     # Load the CSV data
@@ -88,12 +93,12 @@ def main():
 
     # Define the user query
     QUESTION = """
-    I want to have a discussion with people who love swimming.
+    I want to have a discussion with people who love volunteering.
     """
 
     # Invoke the agent to get the response
     try:
-        response = agent.invoke(CSV_PROMPT_PREFIX  + QUESTION + CSV_PROMPT_ADDITIONAL + CSV_PROMPT_SUFFIX)
+        response = agent.invoke(CSV_PROMPT_PREFIX  + QUESTION + CSV_PROMPT_ADDITIONAL + CSV_PROMPT_SUFFIX + CSV_PROMPT_OUT)
         # display(Markdown(response))
         print(response)
     except Exception as e:
