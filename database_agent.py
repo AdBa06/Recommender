@@ -27,7 +27,7 @@ def get_llm_api_config_details():
     return config
 
 # Initialize Azure ChatOpenAI instance
-def get_llm_instance(model='gpt-35-turbo'):
+def get_llm_instance(model='gpt-4'):
     config = get_llm_api_config_details()
     llm = AzureChatOpenAI(
         openai_api_version=config['AZURE_API_VERSION'],
@@ -36,46 +36,54 @@ def get_llm_instance(model='gpt-35-turbo'):
         openai_api_key=config['AZURE_API_KEY']
     )
     return llm
-
-# Define the prompt components
 CSV_PROMPT_PREFIX = """
-First set the pandas display options to show all the columns,
-get the column names, then answer the question.
-"""
+You are an AI assistant. I need your help in analyzing a dataset of user activities.
 
-CSV_PROMPT_ADDITIONAL = """
-I need a list of 10 IDs based on the prompt. For this, I want you to decide who might be the most relevant people to talk to based on my prompt.
+Task:
+First, import pandas as pd. Then, do the tasks below:
 
-For example, if I ask to talk to people interested in swimming, you might choose to give me the most active swimmers, such as those who have it as acitivity 1. 
-And then, you can also give me IDs of swimmers across different ethnicities for diversity perspective. Present me 2-3 of such cases with the corresponding 10 MDAS IDs for every prompt.
+1. Set pandas display options to show all columns.
+2. Retrieve column names from the dataset.
+3. Identify and list 10 MDAS IDs based on the given criteria.
 
+Example:
+If the prompt is "I want to have a discussion with people who love swimming," follow these steps:
+- Select the most active swimmers.
+- Ensure diversity by including swimmers from different ethnicities.
+- You could try to look for "swimming" or "swim" or anything related in the activity columns.
 
+Explanation:
+Each selected ID should be chosen based on activity level and diversity. Mention why each ID was chosen.
 
-You can come up with any arbitrary reasoning to find these 10IDs, they do not have to be based on my examples above.
+Example Prompt: I want to have a discussion with people who love swimming.
+Example Response:
+MDAS ID: 123, Reason: Most active swimmer, Activity 1: Swimming, Ethnicity: Asian
+MDAS ID: 456, Reason: Active swimmer, Activity 1: Swimming, Ethnicity: Caucasian
+...
+
+Now, based on the prompt provided, find the 10 most relevant MDAS IDs.
 """
 
 CSV_PROMPT_SUFFIX = """
-- **ALWAYS** before giving the Final Answer, try another method.
-Then reflect on the answers of the two methods you did and ask yourself
-if it answers correctly the original question.
-If you are not sure, try another method.
-- If the methods tried do not give the same result,reflect and
-try again until you have two methods that have the same result.
-- If you still cannot arrive to a consistent result, say that
-you are not sure of the answer.
-- If you are sure of the correct answer, create a beautiful
-and thorough response using Markdown.
-- **DO NOT MAKE UP AN ANSWER OR USE PRIOR KNOWLEDGE,
-ONLY USE THE RESULTS OF THE CALCULATIONS YOU HAVE DONE**.
-- **ALWAYS**, as part of your "Final Answer", explain how you got
-to the answer on a section that starts with: "\n\nExplanation:\n".
-In the explanation, mention the column names that you used to get
-to the final answer.
-Also, why did you specifically choose those 10 IDs, despite many columns having 'Swim' in them?
+- Always try another method before giving the final answer.
+- Reflect on the answers from both methods and ensure they are consistent.
+- Explain the process and reasoning in your final answer.
+- Use Markdown for formatting the final response.
+- Only use results from your calculations, no prior knowledge.
+- Explain how you arrived at the final answer, mentioning relevant column names.
 """
 
 CSV_PROMPT_OUT = """
-Export the 10 rows corresponding to these MDAS IDs to a csv sheet called 'result.csv'"""
+Please provide the final 10 IDs and their details as follows:
+
+MDAS ID, Reason, Activity 1, Ethnicity
+"""
+
+
+CSV_PROMPT_ADD = """
+Export the 10 rows corresponding to these MDAS IDs to a csv sheet called 'result.csv', do this by creating a dataframe with the relevant rows of IDs, 
+then use the pandas to_csv function.
+once done, add that you have exported the results in your response"""
 
 # Main function to read CSV, invoke LLM, and display response
 def main():
@@ -93,12 +101,12 @@ def main():
 
     # Define the user query
     QUESTION = """
-    I want to have a discussion with people who love volunteering.
+    I want to have a discussion with people who love swimming.
     """
 
     # Invoke the agent to get the response
     try:
-        response = agent.invoke(CSV_PROMPT_PREFIX  + QUESTION + CSV_PROMPT_ADDITIONAL + CSV_PROMPT_SUFFIX + CSV_PROMPT_OUT)
+        response = agent.invoke(CSV_PROMPT_PREFIX  + QUESTION + CSV_PROMPT_ADD + CSV_PROMPT_SUFFIX + CSV_PROMPT_OUT)
         # display(Markdown(response))
         print(response)
     except Exception as e:
