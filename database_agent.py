@@ -57,11 +57,20 @@ Each selected ID should be chosen based on activity level and diversity. Mention
 
 Example Prompt: I want to have a discussion with people who love swimming.
 Example Response:
-MDAS ID: 123, Reason: Most active swimmer, Activity 1: Swimming, Ethnicity: Asian
-MDAS ID: 456, Reason: Active swimmer, Activity 1: Swimming, Ethnicity: Caucasian
-...
+Here is a list of people you might want to speak to as the Swim frequently and swimming is their activity 1.
+MDAS ID: 123, 456, 789, ...
 
-Now, based on the prompt provided, find the 10 most relevant MDAS IDs.
+Alternatively, here is another list of people you could speak to as you could talk to minority ethnicities involved
+in swimming:
+MDAS ID: 222 (Reason: Indian), 333 (Reason: Malay), 444 (Reason: Other etc)
+
+Now, based on the prompt provided, find the 10 most relevant MDAS IDs for two different cases of looking at it like in
+the previous example.
+
+Export the 10 rows corresponding to these MDAS IDs to a csv sheet called 'result1.csv' and 'result2.csv' for the two different cases.
+do this by creating a dataframe with the relevant rows of IDs, 
+then use the pandas to_csv function.
+once done, add that you have exported the results in your response
 """
 
 CSV_PROMPT_SUFFIX = """
@@ -101,12 +110,12 @@ def main():
 
     # Define the user query
     QUESTION = """
-    I want to have a discussion with people who love swimming.
+    I want to have a discussion with people who like chit chat.
     """
 
     # Invoke the agent to get the response
     try:
-        response = agent.invoke(CSV_PROMPT_PREFIX  + QUESTION + CSV_PROMPT_ADD + CSV_PROMPT_SUFFIX + CSV_PROMPT_OUT)
+        response = agent.invoke(CSV_PROMPT_PREFIX  + QUESTION + CSV_PROMPT_SUFFIX + CSV_PROMPT_OUT)
         # display(Markdown(response))
         print(response)
     except Exception as e:
