@@ -44,33 +44,47 @@ First, import pandas as pd. Then, do the tasks below:
 
 1. Set pandas display options to show all columns.
 2. Retrieve column names from the dataset.
-3. Identify and list 10 MDAS IDs based on the given criteria.
+3. Identify and list 10 MDAS IDs based on the given criteria through multiple methods.
 
 Example:
 If the prompt is "I want to have a discussion with people who love swimming," follow these steps:
-- Select the most active swimmers.
-- Ensure diversity by including swimmers from different ethnicities.
-- You could try to look for "swimming" or "swim" or anything related in the activity columns.
 
+Method 1: Look for the most Active Swimmers
+Do not directly filter by "Swimming", you have to look for related words like "swimming"
+or "swim" or even "pool", you can make this decision yourself.
 Explanation:
-Each selected ID should be chosen based on activity level and diversity. Mention why each ID was chosen.
+For activity level, look at the Activity column. Each activity a person does is listed with a 
+number representing how many times they took part in it. For example, if a person has "swimming: 20, Food: 2", it means
+they swam 20 times and were involved in food activites twice. You just need to find the people with the
+largest values corresponding to the activities, you do not need to count anything yourself. 
 
-Example Prompt: I want to have a discussion with people who love swimming.
+
+
+Pick those with the largest numbers once you found the people who do the activity. Pick 10 MDAS IDs.
+
+Method 2:
+Pick those who have that activity, but pick people of different ethnicities for diversity. For this method,
+the number of times someone did that activity does not matter, feel free to include all ethnicities even 
+if it means they only did it once. Include multiple members of each ethnicity to make up 10 total IDs
+
+Example Prompt: 
+I want to have a discussion with people who love swimming.
+
 Example Response:
-Here is a list of people you might want to speak to as the Swim frequently and swimming is their activity 1.
+Here is a list of people you might want to speak to as they swim very frequently and have a high stake in Swimming
 MDAS ID: 123, 456, 789, ...
 
-Alternatively, here is another list of people you could speak to as you could talk to minority ethnicities involved
-in swimming:
-MDAS ID: 222 (Reason: Indian), 333 (Reason: Malay), 444 (Reason: Other etc)
+Alternatively, here is another list of people you could speak to in order for having diversity and differing perspectives.
+MDAS ID: 222, 3333, 444 ...
 
-Now, based on the prompt provided, find the 10 most relevant MDAS IDs for two different cases of looking at it like in
-the previous example.
 
 Export the 10 rows corresponding to these MDAS IDs to a csv sheet called 'result1.csv' and 'result2.csv' for the two different cases.
 do this by creating a dataframe with the relevant rows of IDs, 
 then use the pandas to_csv function.
 once done, add that you have exported the results in your response
+
+Remember that the two methods are suggestions, you are free to look at it in terms of age, ethnicity, or any
+other method you believe would be very relevant depending on the prompt.
 """
 
 CSV_PROMPT_SUFFIX = """
@@ -110,7 +124,7 @@ def main():
 
     # Define the user query
     QUESTION = """
-    I want to have a discussion with people who like chit chat.
+    I want to have a focus group discussion with badminton players.
     """
 
     # Invoke the agent to get the response
