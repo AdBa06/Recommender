@@ -123,9 +123,9 @@ def load_templates():
         """,
 
         "output_format": """
-        Please provide the final 10 IDs and their details as follows:
-
-        MDAS ID, Reason, Activity 1, Ethnicity
+        Please provide a brief overview of the method you used to find 10 MDAS IDs according to the context,
+        and that they can be seen in the output csv file, specify the reason and filename 
+        for each method that you used.
         """
     }
     return templates
