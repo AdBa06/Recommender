@@ -2,6 +2,7 @@ import os
 import pandas as pd
 import re
 import streamlit as st
+import json
 from langchain_openai import AzureChatOpenAI
 from langchain_experimental.agents.agent_toolkits import create_pandas_dataframe_agent
 from dotenv import load_dotenv, dotenv_values
@@ -26,7 +27,7 @@ def get_llm_api_config_details():
     st.write("Configuration loaded:")
     return config
 
-# Initialize Azure ChatOpenAI instance
+# Initialize Azure OpenAI instance
 def get_llm_instance(model='gpt-4'):
     config = get_llm_api_config_details()
     llm = AzureChatOpenAI(
@@ -37,7 +38,7 @@ def get_llm_instance(model='gpt-4'):
     )
     return llm
 
-# Perform initial steps manually
+# Perform initial setup
 def initial_setup(df):
     pd.set_option('display.max_columns', None)
     column_names = df.columns.tolist()
@@ -57,6 +58,7 @@ def load_templates():
         Use this knowledge when deciding the next step.
         """,
         "step2": """
+        use the python_repl_ast tool
         Recognize that the Activities column in the df is formatted as "Activity1: Frequency, Activity2: Frequency..." and so on,
         so you might have to ensure you are able to read within the entire string when looking for activities. 
         Do not split the activities column, just read from within the larger string to see if anything relevant exists anywhere within,
@@ -67,14 +69,20 @@ def load_templates():
         Now, filter the dataset to only keep the rows that have relevant activities.
         """,
         "step3": """
+        use the python_repl_ast tool
         Identify and list 10 MDAS IDs based on the given criteria through multiple methods.
         Method 1: Look through the entire activity column, 
-        The strings in the activity column are formatted as "Activity 1: Frequency, Activity 2: Frequency etc".
-        So you just need to look at the frequency of the activity based on your filtered list to decide who is the most active for a given activity.
-        Do not filter by anything else other than the number right after the activity within the string.
+        The strings in the activity column are formatted as "Volunteering: 20, swimming: 15 etc".
+        You need to figure out the frequency corresponding to swimming, which in the example given is 15. Basically,
+        look for the number right after the appropriate activity within the larger string, usually formatted as Activity: Number.
+        Number always comes after the colon, do not confuse with years such as 2020.
+        You will realize that direct keyword search may not always work. 
+
         Pick those with the largest numbers once you found the people who do the activity. Pick 10 MDAS IDs.
         For example, use this method: df_badminton['badminton_freq'] = df_badminton['Activities'].str.extract('Badminton Court: (\d+)', expand=False).fillna(0).astype(int)   
        
+        if the frequency column you have created consists of purely 0s, there is something wrong with your approach and you need to try again with a different extraction method.
+        If the list is empty, something is wrong.
         
         Method 2: Pick those who have that activity, but pick people of different ethnicities for diversity. Try to have at least 2 Chinese, 2 Malays, 2 Indians, and 2 Others, but in cases where not all races exist for an activity, it is ok to have more people of races that do exist.
         Example Prompt: I want to have a discussion with people who love martial arts.
@@ -85,11 +93,13 @@ def load_templates():
         MDAS ID: 222, 333, 444 ...
         """,
         "step4": """
-        Export the 10 rows corresponding to these MDAS IDs for the two different cases in 2 different csv files, 
+        use the python_repl_ast tool
+        Always Export the 10 rows corresponding to these MDAS IDs for the two different cases in 2 different csv files, 
         which are result1.csv and result2.csv. Do not create any other csv file names.
+        Include the entire row from the original csv file, and add in the activity frequency as a new column
         """,
         "guidelines": """
-        - Use the python_repl_ast tool to execute the python commands
+        - ALWAYS use the python_repl_ast tool to execute the python commands
         - always do one command at a time if using python, you cannot handle multiple commands at the same time
         - any variables declared need to persist, and be global throughout the entire client execution
         - If the query is about facilities, do the same thing but with the facilities column instead of activities column for analysis. 
@@ -110,6 +120,7 @@ def build_prompt(templates, question, column_names):
     prompt = (
         templates["prefix"] +
         f"\nThe dataset contains the following columns: {column_names_str}\n" +
+        templates["step1"] +
         templates["step2"] +
         templates["step3"] +
         templates["step4"] +
@@ -136,7 +147,7 @@ def main():
             st.dataframe(df.head())
 
             # Perform initial setup
-            column_names = initial_setup(df)
+            column_names = df.columns.tolist()
             
             # Initialize the Azure ChatOpenAI model
             model = get_llm_instance()
@@ -147,10 +158,6 @@ def main():
             # Initialize chat history
             if 'chat_history' not in st.session_state:
                 st.session_state.chat_history = []
-            if 'result1' not in st.session_state:
-                st.session_state.result1 = None
-            if 'result2' not in st.session_state:
-                st.session_state.result2 = None
 
             # Display chat history
             for chat in st.session_state.chat_history:
@@ -170,16 +177,21 @@ def main():
                         prompt = build_prompt(templates, query, column_names)
 
                         response = agent.invoke(prompt)
-                        st.session_state.chat_history.append(f"**User:** {query}\n\n**AI:** {response}\n\n")
-                        for chat in st.session_state.chat_history:
-                            st.markdown(chat)
 
-                        # Display the relevant rows directly within the app
-                        if st.session_state.result1 is None or st.session_state.result2 is None:
-                            result1 = pd.read_csv('result1.csv')
-                            result2 = pd.read_csv('result2.csv')
-                            st.session_state.result1 = result1
-                            st.session_state.result2 = result2
+                        # Access the elements directly from the response dictionary
+                        user_query = response.get('input', 'User query not found')
+                        output = response.get('output', 'Output not found')
+
+                        st.subheader("AI Response:")
+                        st.markdown(output)
+
+                        # Read the results from the CSV files
+                        result1 = pd.read_csv('result1.csv')
+                        result2 = pd.read_csv('result2.csv')
+
+                        # Store results in session state to avoid re-reading the files unnecessarily
+                        st.session_state.result1 = result1
+                        st.session_state.result2 = result2
 
                     # Display the results as tables
                     st.subheader("Result 1: Top 10 MDAS IDs based on activity frequency")
