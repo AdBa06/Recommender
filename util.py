@@ -3,6 +3,23 @@ from langchain_openai import AzureChatOpenAI
 from langchain_experimental.agents.agent_toolkits import create_pandas_dataframe_agent
 from dotenv import dotenv_values
 
+from langchain.callbacks.base import BaseCallbackHandler
+from langchain.schema import HumanMessage
+
+class StreamHandler(BaseCallbackHandler):
+    def __init__(self, container, initial_text="", display_method='markdown'):
+        self.container = container
+        self.text = initial_text
+        self.display_method = display_method
+
+    def on_llm_new_token(self, token: str, **kwargs) -> None:
+        self.text += token + " "
+        display_function = getattr(self.container, self.display_method, None)
+        if display_function is not None:
+            display_function(self.text)
+        else:
+            raise ValueError(f"Invalid display_method: {self.display_method}")
+
 # Load the data from the CSV file
 def read_csv_file(file_path):
     try:
@@ -21,7 +38,7 @@ def get_llm_api_config_details():
     return config
 
 # Initialize Azure OpenAI instance
-def get_llm_instance(model='gpt-4', temperature=1, timeout=600):
+def get_llm_instance(model='gpt-4', temperature=0.8, timeout=600):
     config = get_llm_api_config_details()
     llm = AzureChatOpenAI(
         openai_api_version=config['AZURE_API_VERSION'],
@@ -80,7 +97,10 @@ def load_templates():
         to get the frequency right.
 
         Use .str.extract('keyword.*: (\d+)', expand=False) to make sure you are capturing all activities named
-        differently and not just a fixed keyword. 
+        differently and not just a fixed keyword. It is always better to use a shorter keyword,
+        for example if you use the word "swimming", you might miss activities that only mention "swim", 
+        so it makes more sense to use "swim". If you use "volunteerism", you might miss activities that
+        mention only "volunteer", so remember to take this into account.
          
         The number always comes after the colon, not before.
 
@@ -106,7 +126,7 @@ def load_templates():
         use the python_repl_ast tool, execute code line by line.
         Always Export the 10 rows corresponding to these MDAS IDs using each method you used
         to result1.csv and result2.csv
-        Include the entire row from the original csv file, and add in the activity frequency as a new column
+        Include the entire rows and not just a few columns, and add in the activity frequency as a new column. 
         """,
         "guidelines": """
         - ALWAYS use the python_repl_ast tool to execute the python commands
@@ -133,6 +153,7 @@ def build_prompt(templates, question, column_names):
     column_names_str = ", ".join(column_names)
     prompt = (
         templates["prefix"] +
+        'import pandas as pd. Import re' +
         f"\nThe dataset contains the following columns: {column_names_str}\n" +
         templates["step1"] +
         templates["step2"] +
@@ -150,8 +171,9 @@ def build_prompt(templates, question, column_names):
     return prompt
 
 # Function to invoke LLM with prompt
-def invoke_llm(llm, prompt):
-    return llm(prompt)
+def invoke_llm(llm, prompt, stream_handler):
+    human_message = HumanMessage(content=prompt)
+    return llm([human_message], callbacks=[stream_handler])
 
 # Function to create a Pandas DataFrame agent
 def create_agent(llm, df):
