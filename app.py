@@ -4,41 +4,42 @@ import streamlit as st
 from dotenv import dotenv_values
 from util import read_csv_file, get_llm_instance, create_agent, load_templates, build_prompt, invoke_llm, StreamHandler
 
+def get_secrets():
+    # Mock function to return secrets. Replace with actual secret fetching mechanism.
+    return {'app_pw': 'mccy0108'}
+
+def check_password():
+    """Returns `True` if the user had a correct password."""    
+    if "password_correct" not in st.session_state:
+        st.session_state["password_correct"] = False
+
+    def password_entered():
+        """Checks whether a password entered by the user is correct."""
+        pw = st.session_state["password"]
+        secrets = get_secrets()
+
+        if pw == secrets['app_pw']:
+            st.session_state["password_correct"] = True
+            del st.session_state["password"]  # don't store password
+        else:
+            st.session_state["password_correct"] = False
+
+    if not st.session_state["password_correct"]:
+        # Show input form if password is not correct.
+        with st.form(key='login'):
+            st.text_input("Password", type="password", key="password")
+            submit_button = st.form_submit_button('Submit', on_click=password_entered)
+            if st.session_state["password_correct"] is False and submit_button:
+                st.error("😕 Password incorrect")
+        return False
+    else:
+        # Password correct.
+        return True
+
 # Custom CSS for background and input box styling
 def local_css(file_name):
     with open(file_name) as f:
         st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
-
-def set_custom_css():
-    css = """
-    <style>
-    .stApp {
-        background-color: #EBDAB7;
-        color: black; /* Set default text color to black */
-    }
-    .stTextInput input {
-        background-color: white;
-        color: black;
-    }
-    header { /* This will target the header and make it match the background */
-        background-color: #F5E1FF;
-        color: black; 
-    }
-    .message-box {
-        background-color: #fff;
-        border: 1px solid #ccc;
-        border-radius: 10px;
-        padding: 10px;
-        margin: 10px 0;
-        font-size: 16px;
-        color: black;
-        max-width: 100%;
-        word-wrap: break-word;
-        overflow-wrap: break-word;
-    }
-    </style>
-    """
-    st.markdown(css, unsafe_allow_html=True)
 
 def retry_prompt(agent, prompt, stream_handler):
     max_retries = 3
@@ -56,21 +57,51 @@ def retry_prompt(agent, prompt, stream_handler):
                 return None
 
 def main():
-    st.title("CitizenGoWhere")
+    st.title("Citizen Recommender")
     st.subheader("Finding the best citizens to reach out to for Focus Group Discussions")
     st.markdown("**Disclaimer:** Please perform manual verification of AI-generated responses")
 
-    # Apply custom CSS
-    set_custom_css()
+# FAQ SECTION
+    with st.expander("FAQ"):
+        st.markdown("""
+        **Dataset usage**
+        - Dataset needs to be in CSV format 
+        - Ensure the column headings are at the first row of the dataset
+        - For optimal accuracy, ensure dataset has column headings with meaning
+        - Data is not collected or stored by the application
 
-    # Upload CSV
-    uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
-    if uploaded_file is not None:
-        df = read_csv_file(uploaded_file)
+        **Prompting**
+        - For ease of processing, input custom group size taking into account buffer on user end
+        - Stacking queries will lead to longer processing times 
+        - Encouraged to prompt as directly as possible
+        
+        **Interface**
+        - All key sections are expandible or collapsible
+        - If model fails due to an error, a rerun usually fixes the issue
+        """)
+
+    if check_password():
+        df = None
+        # Test Mode button
+        if st.button("Test Mode"):
+            test_mode = True
+        else:
+            test_mode = False
+
+        if not test_mode:
+            # Upload CSV
+            uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
+            if uploaded_file is not None:
+                df = read_csv_file(uploaded_file)
+        else:
+            # Load the CSV file for test mode
+            df = read_csv_file("merged_df.csv")
+            st.success("Test Mode: Loaded merged_df.csv successfully!")
+
         if df is not None:
             st.success("CSV file read successfully!")
-            st.write("Data Preview:")
-            st.dataframe(df)  # Display the entire dataframe
+            with st.expander("Data Preview"):
+                st.dataframe(df)  # Display the entire dataframe
 
             # Perform initial setup
             column_names = df.columns.tolist()
@@ -92,34 +123,36 @@ def main():
             # Define the user query
             query = st.text_input("Enter your query:")
 
-            if query:
+            # Add group size selection
+            st.markdown("**Select Group Size:**")
+            group_size = None
+            group_size = st.number_input("Enter custom group size", min_value=1, step=1)
+
+            if query and group_size and st.button("Search"):
                 # Retry the prompt in case of error
                 try:
                     # Load templates
                     templates = load_templates()
 
-                    # Build the final prompt
-                    prompt = build_prompt(templates, query, column_names)
+                    # Include group size in the prompt
+                    prompt = build_prompt(templates, f"{query} for a group of {group_size} people", column_names)
 
-                    # Placeholder for real-time thought process
-                    thought_process_placeholder = st.empty()
+                    # Expander for real-time thought process (streaming content)
+                    with st.expander("AI Thought Process"):
+                        thought_process_placeholder = st.empty()
 
-                    # Create a StreamHandler instance
-                    stream_handler = StreamHandler(thought_process_placeholder, display_method='markdown')
+                        # Create a StreamHandler instance
+                        stream_handler = StreamHandler(thought_process_placeholder, display_method='markdown')
 
-                    # Retry the prompt
-                    response = retry_prompt(agent, prompt, stream_handler)
+                        # Retry the prompt
+                        response = retry_prompt(agent, prompt, stream_handler)
 
                     if response:
-                        # Real-time processing and thought display
-                        # st.subheader("AI Thought Process")
-                        # st.markdown(f'<div class="message-box">{response}</div>', unsafe_allow_html=True)
-
                         user_query = response.get('input', 'User query not found')
                         output = response.get('output', 'Output not found')
 
-                        st.subheader("AI Response:")
-                        st.markdown(f'<div class="message-box">{output}</div>', unsafe_allow_html=True)
+                        with st.expander("Final answer"):
+                            st.markdown(f'<div class="message-box">{output}</div>', unsafe_allow_html=True)
 
                         # Read the results from the CSV files
                         result1 = pd.read_csv('result1.csv')
@@ -129,12 +162,13 @@ def main():
                         st.session_state.result1 = result1
                         st.session_state.result2 = result2
 
-                        # Display the results as tables
-                        st.subheader("First recommended group to talk to")
-                        st.dataframe(st.session_state.result1)
+                        # Display the results as tables under expandable sections
+                        with st.expander("First recommended group to talk to"):
+                            st.dataframe(st.session_state.result1)
 
-                        st.subheader("Second recommended group to talk to")
-                        st.dataframe(st.session_state.result2)
+                        with st.expander("Second recommended group to talk to"):
+                            st.dataframe(st.session_state.result2)
+
                     else:
                         st.warning("No response from the model.")
 
