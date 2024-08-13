@@ -94,6 +94,7 @@ def get_llm_api_config_details():
     # return secrets
 
 
+
 # Initialize Azure OpenAI instance
 def get_llm_instance(model='gpt-4', temperature=0.8, timeout=1000):
     config = get_llm_api_config_details()
@@ -159,9 +160,14 @@ def load_templates():
         If asked for "History lovers", pass in things like "Museum" etc.
         You have to decide what keyword to use for generalized queries.
         If this filtered dataset is empty, redo the process from the start.
+        if the prompt has nothing related to the dataset or the dataset is empty, mention 
+        in your final answer that "I am unable to make a correlation between your prompt and the given 
+        dataset".
 
-        Next, find the frequency of the relevant activities by calling the extract_activity_frequency(df, column, keyword)
-        function, using the same keywords and column you used to filter the dataset.
+        Next, find the frequency of the relevant activitiy. Only if the formatting is "Activity: Frequency",
+        Call the extract_activity_frequency(df, column, keyword) 
+         function, using the same keywords and column you used to filter the dataset.
+        Otherwise, use your own methods to derive. Ensure there is a new column created with a corresponding frequency for each individual.
         If this filtered dataset is empty, redo the process from the start.
         """,
         "step3": """
@@ -173,10 +179,9 @@ def load_templates():
         - If the query is about "the state of Olympic swimming in Singapore", use method 1.
         - If the query is about "barriers to entry in swimming",use method 4.
         - If the query is about "what stops people from swimming more", use method 3.
-        Look through all the methods, and decide which 2 are the best to use for the query.
-        Identify and list the number of MDAS IDs based on the query.
-        Export the results of each method you pick ultimately to "result1.csv" and "result2.csv". 
-        
+
+        Look through all the methods, and always use exactly two methods to pick two different sets of results.
+        Store the results in dataframes with name df_result1 and df_result2
         Method 1: Pick the IDs with the highest frequency. To sort, use the function sort_and_filter_by_frequency(df). If this filtered dataframe is empty, redo the process from the start.
         
         Method 2: Pick those who have that activity, but pick people of different ethnicities for diversity. Try to have at least 2 Chinese, 2 Malays, 2 Indians, and 2 Others, but in cases where not all races exist for an activity, it is ok to have more people of races that do exist.
@@ -184,16 +189,17 @@ def load_templates():
         Method 3: Pick people who do the activity but infrequently. You are free to decide how to do this.
 
         Method 4: Pick minorities, such as females, minority ethnicities and so on, with a mix of those who do the activity frequently and those
-        who do not. Just for context, in Singapore, 
-        the smallest minority races are indians and others, followed by Malays. The Chinese are a majority.
+        who do not. Just for context, in Singapore, the smallest minority races are indians and others, followed by Malays. 
 
-     
+        """,
+        "step4": """
+        Export the two different results you have to result1.csv and result2.csv,
+        using df_result1.to_csv("result1.csv", index=False) and df_result2.to_csv("result2.csv", index = False)
         """,
         "guidelines": """
         - ALWAYS use the python_repl_ast tool to execute the python commands
         - if you try the same Action input three times and you run into errors, switch to a different action input.
         - always do one command at a time if using python
-        - any variables declared need to persist, and be global throughout the entire client execution
         - Explain the process and reasoning in your final answer.
         - Use Markdown for formatting the final response.
         - Always export results to result1.csv and result2.csv
@@ -222,15 +228,19 @@ def build_prompt(templates, question, column_names):
         question +
         'using the python_repl_ast tool only' +
         'executing python code only one command at a time' +
-        'never add backticks "`" around the action input' +
-        'never use Re'
+        'never add backticks "`" around the action input'
     )
     return prompt
 
 # Function to invoke LLM with prompt
 def invoke_llm(llm, prompt, stream_handler):
-    human_message = HumanMessage(content=prompt)
-    return llm([human_message], callbacks=[stream_handler])
+        human_message = HumanMessage(content=prompt)
+        return llm([human_message], callbacks=[stream_handler])
+
+
+# def _handle_error(error) -> str:
+#     # Suppress the error by returning an empty string
+#     return ""
 
 # Function to create a Pandas DataFrame agent
 def create_agent(llm, df):

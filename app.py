@@ -121,7 +121,7 @@ def main():
                 st.markdown(f'<div class="message-box">{chat}</div>', unsafe_allow_html=True)
 
             # Define the user query
-            query = st.text_input("Enter your query:")
+            query = st.text_input("Enter your query:", placeholder="e.g., I want to talk to active swimmers about their experiences")
 
             # Add group size selection
             st.markdown("**Select Group Size:**")
@@ -151,8 +151,8 @@ def main():
                         user_query = response.get('input', 'User query not found')
                         output = response.get('output', 'Output not found')
 
-                        with st.expander("Final answer"):
-                            st.markdown(f'<div class="message-box">{output}</div>', unsafe_allow_html=True)
+                        st.markdown("**Final Answer**")
+                        st.markdown(f'<div class="message-box">{output}</div>', unsafe_allow_html=True)
 
                         # Read the results from the CSV files
                         result1 = pd.read_csv('result1.csv')
